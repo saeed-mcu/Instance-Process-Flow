@@ -1,5 +1,7 @@
 # Instance Launch Process
 ![instance](./images/openstack-instance-launch-process.png)
+
+## How the OpenStack instance process to launch in OVN integrated enviroment?
 1. Using the dashboard or the command-line client, the user's account credentials are sent as a _REST API_ call to the identity service endpoint. After successful authentication, the identity service generates and returns an authentication token (auth token) to the user. The auth token is included with subsequent REST calls to other services, to permit those services to perform actions on behalf of this user.
 
 2. The instance launch request and the auth token are sent as a _REST API_ call to the compute service endpoint. `nova_api` relays the request to the identity service, which validates the auth token and returns allowed roles and permissions in the updated token header.
