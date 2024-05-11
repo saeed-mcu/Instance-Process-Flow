@@ -1,10 +1,30 @@
 # Instance Launch Process
+
+Provisioning a new instance involves the interaction between multiple components inside OpenStack :
+
+**CLI** Command Line Interpreter for submitting commands to OpenStack Compute.
+
+**Dashboard (“Horizon”)** provides the interface for all the OpenStack services.
+
+**Compute (“Nova”)** retrieves virtual disks images(“Glance”) , attach flavor and associated metadata and transforms end user API requests into running instances.
+
+**Network (“Neutron”)** provides virtual networking for Compute which allows users to create their own networks and then link them to the instances.
+
+**Block Storage (“Cinder”)** provides persistent storage volumes for Compute instances.
+
+**Image (“Glance”)** can store the actual virtual disk files in the Image Store.
+
+**Identity (“Keystone”)** provides authentication and authorization for all OpenStack services.
+
+**Message Queue(“RabbitMQ”)** handles the internal communication within Openstack components such as Nova , Neutron and Cinder.
+
 ![instance](./images/openstack-instance-launch-process.png)
 
 ## How the OpenStack instance process to launch in OVN integrated enviroment?
-1. Using the dashboard or the command-line client, the user's account credentials are sent as a _REST API_ call to the identity service endpoint. After successful authentication, the identity service generates and returns an authentication token (auth token) to the user. The auth token is included with subsequent REST calls to other services, to permit those services to perform actions on behalf of this user.
 
-2. The instance launch request and the auth token are sent as a _REST API_ call to the compute service endpoint. `nova_api` relays the request to the identity service, which validates the auth token and returns allowed roles and permissions in the updated token header.
+1. Using the _dashboard_ or the _CLI_ client, the user's account credentials are sent as a _REST API_ call to the identity service endpoint. After successful authentication, the identity service generates and returns an authentication token (**auth token**) to the user. The auth token is included with subsequent REST calls to other services, to permit those services to perform actions on behalf of this user.
+
+2. The **instance launch** request and the auth token are sent as a _REST API_ call to the compute service endpoint. `nova_api` relays the request to the identity service, which validates the auth token and returns allowed roles and permissions in the updated token header.
 
 3. `nova_api` creates a persistent database entry for the new instance, including the launch parameters in the original request. Other processes can obtain data from this entry, and update the current state to this persistent entry.
 
@@ -12,9 +32,9 @@
 
 5. `nova_scheduler` subscribes to the new instance request, reads filtering and weighing parameters from the instance database entry, reads cluster compute node data from the database, and updates the instance record with the selected compute host ID. `nova_scheduler` submits a `rpc.call` to a message queue, requesting that `nova_compute` initiate an instance launch.
 
-6. `nova_compute` subscribes to the new instance request, then publishes a `rpc.call` for nova_conductor to prepare for an instance launch.
+6. `nova_compute` subscribes to the new instance request, then publishes a `rpc.call` for `nova_conductor` to prepare for an instance launch.
 
-7. nova_conductor subscribes to the new instance request, reads the database entry to obtain the compute host ID and instance flavor with requested RAM, vCPUs, and disk configuration, and then publishes the new instance state to the message queue.
+7. `nova_conductor` subscribes to the new instance request, reads the database entry to obtain the compute host ID and instance flavor with requested RAM, vCPUs, and disk configuration, and then publishes the new instance state to the message queue.
 
 8. `nova_compute` subscribes to the new instance request to retrieve the instance information. Using the image ID from the instance request, `nova_compute` sends a _REST API_ call to the image service to obtain the requested image's URL. The `glance_api` service forwards the request to the identity service, which again validates the auth token and returns allowed roles and permissions in the updated token header.
 
@@ -37,3 +57,15 @@
 17. `nova_compute` generates data for the compute node driver and executes the request using libvirt to create a VM on the compute host. The VM appears in the dashboard and in commands that list servers. `nova_compute` passes the volume information to libvirt.
 
 18. `cinder_volume` subscribes to the new instance request and retrieves the cluster map. libvirt then mounts the volume on the new instance.
+
+19. `nova-compute` generates data for hypervisor driver and executes request on Hypervisor( via libvirt or api).
+
+The table represents the Instance state at various steps during the provisioning :
+
+|Status|Task                |Power-state |	Steps|
+|------|--------------------|------------|-------|
+|Build |scheduling          |None        |2-7    |
+|Build |networking          |None        |8-13   |
+|Build |block_device_mapping|None        |14-18  |
+|Build |spawing             |None        |19     |
+|Active|none                |Running     |	     |
